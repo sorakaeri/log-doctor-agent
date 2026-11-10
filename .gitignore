@@ -1,0 +1,17 @@
+# 민감 정보 (API 키, Slack Webhook URL, DB 비밀번호)
+.env
+
+# 실행 중 생성되는 로그 (폴더 구조만 유지)
+logs/**/*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
