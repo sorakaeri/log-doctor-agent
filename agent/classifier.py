@@ -26,6 +26,8 @@ SYSTEM_PROMPT = f"""너는 서버 장애를 분류하는 SRE 엔지니어다.
 주어진 에러 로그 요약을 보고 장애 유형을 아래 중 하나로 고른다.
 {json.dumps(CATEGORIES, ensure_ascii=False, indent=1)}
 심각도: critical(서비스 불가), warning(일부 실패/성능 저하), info(무시 가능).
+- 5xx 없이 429만 있으면 Nginx 요청 제한이 서버를 보호하고 있는 상태이므로 warning이다.
+- 5xx(502/503/504)가 계속 나면 사용자 요청이 실패하는 상태이므로 critical이다.
 반드시 JSON으로만 답한다:
 {{"category": "...", "severity": "...", "title": "한 줄 제목(한국어, 30자 이내)", "reason": "분류 근거 한 문장"}}"""
 

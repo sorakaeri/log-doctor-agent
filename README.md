@@ -166,13 +166,100 @@ log-doctor-agent/
 | 1 | 3-Tier 환경, 장애 시나리오 스크립트 | ✅ 로컬 실행 확인 (11/25) |
 | 2 | 로그 수집·에러 감지, LLM 분류, Slack 전송 | ✅ 코드·테스트 완료 |
 | 3 | Agent 도구, 조치 문서 RAG, 중복 알림 묶기 | ✅ 코드·테스트 완료 |
-| 4 | 실제 환경에서 시나리오 3개 실행, 스크린샷·시연 영상 | ⬜ |
+| 4 | 실제 환경(Windows + Docker Desktop)에서 시나리오 3개 실행, 개선 반영 | ✅ (11/25) |
 
 ## 7. 실행 결과
 
-(시나리오별 Slack 알림 스크린샷과 시연 영상 추가 예정)
+실행 환경: Windows 11 + Docker Desktop, Gemini 3.5 Flash Lite (예비: 3.1 Flash Lite), Slack 개인 워크스페이스 `#장애알림` 채널
 
-## 8. 참고 자료 및 AI 도구 활용
+| 시나리오 | 발생시킨 장애 | Agent 분류 | Agent가 고른 도구 (순서) | 원인 추정 |
+|---|---|---|---|---|
+| 1. DB 다운 | `docker compose stop db` | DB 연결 장애 · critical | 컨테이너 상태 → DB 컨테이너 로그 → 조치 문서 | ✅ DB 컨테이너 종료로 앱 503 |
+| 2. WAS 다운 | `docker compose stop app` | 네트워크/업스트림 · critical | 컨테이너 상태 → 앱 컨테이너 로그 → Nginx 에러 로그 → 조치 문서 | ✅ WAS 종료로 Nginx 502 |
+| 3. 요청 폭주 | 동시 50개, 초당 약 200건 요청 | 리소스/트래픽 폭주 | 컨테이너 상태 → 리소스 사용량 → 트래픽 요약 → 조치 문서 | ✅ 단일 출처 요청 폭주로 429 |
+
+같은 Agent 코드인데도 장애 유형(Routing 결과)에 따라 **서로 다른 도구를 골라 조사**했습니다. DB·WAS 장애에서는 컨테이너 로그를, 트래픽 장애에서는 리소스 사용량과 트래픽 요약을 확인했습니다.
+
+### 시나리오 1: DB 다운
+
+![DB 다운 Slack 알림](docs/images/01-db-down-slack.png)
+
+### 시나리오 2: WAS 다운
+
+![WAS 다운 Slack 알림](docs/images/02-app-down-slack.png)
+
+### 시나리오 3: 요청 폭주
+
+![요청 폭주 Slack 알림](docs/images/03-flood-slack.png)
+
+### Agent 실행 로그 (시나리오 3)
+
+첫 번째 모델이 사용량 폭주(503)로 실패하자 예비 모델로 자동 전환해 분석을 이어간 기록입니다. 장애 1건에 LLM을 4회 호출했고, 이후 반복된 에러는 같은 장애로 묶여 추가 알림이 가지 않았습니다.
+
+```text
+$ python -m agent
+Log Doctor 시작 | 모드: LLM + Agent | 모델: gemini-3.5-flash-lite,gemini-3.1-flash-lite | 주기: 30초
+[11:24:12] 새 로그 0줄, 신규 장애 없음
+[11:24:42] 새 로그 8줄, 신규 장애 없음
+[11:25:12] 장애 감지 (ID c78d1850, 에러 3930건)
+    1965회 | nginx_access: GET /api/items -> 429 (upstream=-)
+    1965회 | nginx_error: limiting requests, excess: <n> by zone "api"
+  ! gemini-3.5-flash-lite 실패 → 다음 모델 시도 (HTTP 503: This model is currently experiencing high demand. )
+  분류: 리소스 부족/트래픽 폭주 / critical (llm) - Nginx 설정된 API 속도 제한을 초과하는 트래픽이 유입되어 429 에러가 다수 발생하고 있습니다.
+  Agent 조사 시작
+    → get_container_status()
+    → get_resource_usage()
+    → summarize_traffic(last_n=5000)
+    → search_runbook(query='429 limiting requests')
+  원인: 클라이언트(호스트, IP 172.18.0.1)로부터 /api/items 엔드포인트에 대량의 요청이 집중되어 Nginx의 rate limit(zone 'api', 초당 10건, burst 20 제한)에 걸려 429 Too Many Requests 에러가 발생함.
+  Slack 전송 완료
+  (이번 장애에 사용한 Gemini 호출: 누적 4회)
+[11:25:52] 새 로그 10줄, 신규 장애 없음
+[11:26:22] 새 로그 16줄, 신규 장애 없음
+```
+
+```text
+$ python scripts/chaos.py flood
+시나리오 3: 요청 폭주 10초 (동시 요청 50개)
+[flood] 0: 29건, 200: 91건, 429: 1965건
+  초당 약 208건 요청
+
+$ python scripts/chaos.py recover
+전체 복구 (모든 컨테이너가 healthy가 될 때까지 대기)
+  /nginx-health   -> 200
+  /health         -> 200
+  /health/db      -> 200
+```
+
+테스트 (Docker·Gemini·Slack 없이 가짜 LLM으로 전체 흐름 검증):
+
+```text
+$ python -m unittest -v
+Ran 6 tests ... OK
+```
+
+## 8. 개선 과정 (트러블슈팅)
+
+실제 환경에서 실행하며 발견한 문제와 고친 방법입니다.
+
+| # | 발견한 문제 | 원인 | 해결 |
+|---|---|---|---|
+| 1 | Gemini 호출 실패 (HTTP 404, 503) | `gemini-2.5-flash`가 신규 사용자에게 제공 중단, `gemini-3.8-flash`는 사용량 폭주 + 무료 한도 하루 20회 | 무료 한도가 넉넉한 Flash Lite(하루 500회)로 변경. 503·429면 같은 모델 재시도 대신 **예비 모델로 즉시 전환**해 한도 낭비 방지 |
+| 2 | 복구 직후 장애 알림이 옴 (오탐) | `recover`가 WAS를 켜고 3초만 기다린 뒤 상태를 확인 → WAS가 아직 기동 중이라 502 | WAS에 헬스체크 추가, `docker compose up -d --wait`로 **healthy가 될 때까지 대기** |
+| 3 | 요청 폭주를 일으켰는데 429가 안 나옴 | 동시 요청 20개가 느린 응답을 기다리느라 초당 8.6건에 그쳐 한도(초당 10건) 미달 | 동시 요청 50개로 늘려 초당 약 200건 발생. 초당 요청 수를 출력해 확인 가능하게 함 |
+| 4 | Agent가 "172.18.0.1 차단"을 제안 | 이 IP는 Docker 게이트웨이라 PC의 모든 요청이 이 IP로 보임 → 차단하면 서비스 전체 중단 | 조치 문서(RAG)에 게이트웨이 IP 주의사항 추가 → Agent가 "PC에서 요청을 보내는 프로그램 확인"으로 제안 변경 |
+| 5 | 조치 방안에 Agent 내부 도구 이름(`summarize_traffic`)이 나옴 | 사람이 실행할 수 없는 조치 | 사람이 터미널에서 실행 가능한 명령만 쓰도록 지시문 보강 |
+| 6 | 같은 요청 폭주인데 실행마다 심각도가 warning/critical로 다름 | LLM 판단 기준이 모호 | "5xx 없이 429만 있으면 서버가 보호되는 중이므로 warning" 기준을 분류 지시문에 명시 |
+
+**문제 2 (오탐) 당시 알림:** WAS 기동 중 502를 장애로 감지했습니다. Agent는 근거에 "WAS가 재시작되었거나(11:11:05 시작)"라고 써서 상황 자체는 정확히 짚었습니다.
+
+![복구 중 오탐 알림](docs/images/06-false-alarm-slack.png)
+
+**문제 4 개선 전후:** 개선 전에는 게이트웨이 IP 차단을 제안했고(아래), 조치 문서를 보강한 뒤에는 "호스트 PC에서 요청을 보내는 프로그램을 중단"하도록 바뀌었습니다(위 시나리오 3 화면).
+
+![개선 전 요청 폭주 알림](docs/images/07-flood-before-fix-slack.png)
+
+## 9. 참고 자료 및 AI 도구 활용
 
 - 코드 초안 작성과 설계 검토에 Anthropic Claude를 활용했습니다. 설계 결정(읽기 전용, Routing 기준, 중복 알림 방지, 대상 시나리오)은 직접 정하고 검토했습니다.
 - 참고한 유사 프로젝트
