@@ -4,6 +4,9 @@
 # 실행 중 생성되는 로그 (폴더 구조만 유지)
 logs/**/*.log
 
+# Agent가 읽은 로그 위치 기록
+agent/.state.json
+
 # Python
 __pycache__/
 *.pyc
