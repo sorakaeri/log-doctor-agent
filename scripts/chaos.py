@@ -16,7 +16,9 @@ import time
 import urllib.error
 import urllib.request
 
-BASE_URL = "http://localhost:8080"
+# localhost 대신 127.0.0.1: Windows에서 IPv6(::1) 시도와 시스템 프록시 조회로 요청이 느려지는 것을 피한다.
+BASE_URL = "http://127.0.0.1:8080"
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 ENDPOINTS = ["/api/items", "/api/items/1", "/health/db"]
 
 
@@ -29,7 +31,7 @@ def compose(*args: str) -> None:
 def request(path: str) -> int:
     """GET 요청 후 상태 코드 반환. 연결 자체가 안 되면 0."""
     try:
-        with urllib.request.urlopen(BASE_URL + path, timeout=5) as resp:
+        with OPENER.open(BASE_URL + path, timeout=5) as resp:
             return resp.status
     except urllib.error.HTTPError as e:
         return e.code
@@ -89,9 +91,11 @@ def cmd_app_down() -> None:
     print("→ 기대 결과: Nginx error 로그에 upstream 연결 실패, access 로그에 502")
 
 
-def cmd_flood(seconds: int = 10) -> None:
+def cmd_flood(seconds: int = 10, workers: int = 50) -> None:
     ensure_healthy()
-    print(f"시나리오 3: 요청 폭주 {seconds}초 (스레드 20개)")
+    # 동시 요청이 Nginx 허용치(초당 10건 + burst 20)를 확실히 넘도록 50개로 보낸다.
+    # (WAS가 느리면 20개로는 초당 요청 수가 10건을 넘지 못해 429가 나오지 않는다)
+    print(f"시나리오 3: 요청 폭주 {seconds}초 (동시 요청 {workers}개)")
     stats: dict[int, int] = {}
     lock = threading.Lock()
     deadline = time.time() + seconds
@@ -102,21 +106,21 @@ def cmd_flood(seconds: int = 10) -> None:
             with lock:
                 stats[code] = stats.get(code, 0) + 1
 
-    threads = [threading.Thread(target=worker) for _ in range(20)]
+    threads = [threading.Thread(target=worker) for _ in range(workers)]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
     print_stats("flood", stats)
+    print(f"  초당 약 {sum(stats.values()) / seconds:.0f}건 요청")
     print("→ 기대 결과: Nginx access 로그에 429 다수, error 로그에 'limiting requests'")
 
 
 def cmd_recover() -> None:
-    print("전체 복구")
-    compose("start", "db")
-    time.sleep(5)  # DB 기동 대기
-    compose("start", "app")
-    time.sleep(3)
+    print("전체 복구 (모든 컨테이너가 healthy가 될 때까지 대기)")
+    # --wait: 헬스체크가 통과할 때까지 기다린다. 고정 시간 대기 후 바로 요청하면
+    # WAS가 아직 뜨는 중이라 502가 나고, 그 502가 Agent에게 새 장애로 잡힌다.
+    compose("up", "-d", "--wait")
     cmd_status()
 
 

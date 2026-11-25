@@ -47,7 +47,7 @@ class Config:
     log_files: dict = field(default_factory=dict)
     state_file: Path = ROOT / "agent" / ".state.json"
     runbook_dir: Path = ROOT / "agent" / "runbooks"
-    base_url: str = "http://localhost:8080"
+    base_url: str = "http://127.0.0.1:8080"
     containers: tuple = ("ld-nginx", "ld-app", "ld-db")
 
     @classmethod

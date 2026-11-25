@@ -29,6 +29,13 @@ services:
       LOG_FILE: /app/logs/app.log
     volumes:
       - ./logs/app:/app/logs
+    healthcheck:
+      # WAS가 요청을 받을 준비가 됐는지 확인 (recover 시 --wait가 이 결과를 기다림)
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
     depends_on:
       db:
         condition: service_healthy
