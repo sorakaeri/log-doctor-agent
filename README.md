@@ -70,7 +70,7 @@ flowchart TD
 |---|---|---|
 | 분석 대상 인프라 | Docker Compose, Nginx 1.27, FastAPI, PostgreSQL 16 | 무료, 로컬에서 장애 재현 |
 | Agent | Python 3.11+ **표준 라이브러리만 사용** | `pip install` 없이 실행 |
-| LLM | Google Gemini API (REST, Function Calling) | 무료 티어, 모델은 `.env`에서 변경 |
+| LLM | Google Gemini API (REST, Function Calling) | 무료 티어 Flash Lite(하루 500회), 503·429 시 예비 모델로 자동 전환 |
 | 알림 | Slack Incoming Webhook (Block Kit 메시지) | 무료 |
 | 적용한 개념 | Prompt Chaining, Routing, Tool Calling(Agent 루프), RAG(키워드 검색), Fallback | |
 
@@ -99,6 +99,7 @@ python scripts/chaos.py status    # 세 경로 모두 200이면 정상
 ### 2) Agent 점검
 
 ```bash
+python scripts/list_models.py     # 내 API 키로 쓸 수 있는 Gemini 모델 ID 확인
 python -m agent --check           # 로그 파일, Gemini 연결 확인
 python -m agent --test-slack      # Slack에 테스트 메시지 전송
 ```

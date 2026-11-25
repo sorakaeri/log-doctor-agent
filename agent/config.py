@@ -36,7 +36,7 @@ def load_dotenv(path: Path = ROOT / ".env") -> None:
 @dataclass
 class Config:
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-3.8-flash"
+    gemini_model: str = "gemini-3.5-flash-lite,gemini-3.1-flash-lite"
     slack_webhook_url: str = ""
 
     interval_sec: int = 30          # 로그 확인 주기
@@ -56,7 +56,7 @@ class Config:
         logs = ROOT / "logs"
         return cls(
             gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
-            gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+            gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite,gemini-3.1-flash-lite"),
             slack_webhook_url=os.getenv("SLACK_WEBHOOK_URL", ""),
             interval_sec=int(os.getenv("AGENT_INTERVAL_SEC", "30")),
             cooldown_sec=int(os.getenv("AGENT_COOLDOWN_SEC", "300")),
