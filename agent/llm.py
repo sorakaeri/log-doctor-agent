@@ -39,7 +39,8 @@ class GeminiClient:
         if not self.available:
             raise LLMError("GEMINI_API_KEY가 설정되지 않음")
 
-        body: dict = {"contents": contents, "generationConfig": {"temperature": 0.2}}
+        # Gemini 3 계열은 temperature 기본값(1.0) 유지를 권장하므로 따로 지정하지 않는다.
+        body: dict = {"contents": contents, "generationConfig": {}}
         if system:
             body["systemInstruction"] = {"parts": [{"text": system}]}
         if tools:
