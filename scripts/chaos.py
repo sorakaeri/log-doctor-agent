@@ -63,7 +63,18 @@ def cmd_traffic(seconds: int = 20) -> None:
     print_stats("traffic", send_requests(seconds * 2))
 
 
+def ensure_healthy() -> None:
+    """장애를 내기 전에 서비스가 정상인지 확인한다.
+    이전 시나리오를 복구하지 않고 다음 시나리오를 실행하면 결과가 섞이기 때문이다."""
+    code = request("/health/db")
+    if code != 200:
+        print(f"! 서비스가 정상 상태가 아닙니다 (/health/db -> {code or '연결 실패'}).")
+        print("  이전 장애가 남아 있으면 결과가 섞입니다. 먼저 실행하세요: python scripts/chaos.py recover")
+        sys.exit(1)
+
+
 def cmd_db_down() -> None:
+    ensure_healthy()
     print("시나리오 1: DB 다운")
     compose("stop", "db")
     print_stats("db-down", send_requests(10))
@@ -71,6 +82,7 @@ def cmd_db_down() -> None:
 
 
 def cmd_app_down() -> None:
+    ensure_healthy()
     print("시나리오 2: WAS 다운")
     compose("stop", "app")
     print_stats("app-down", send_requests(10))
@@ -78,6 +90,7 @@ def cmd_app_down() -> None:
 
 
 def cmd_flood(seconds: int = 10) -> None:
+    ensure_healthy()
     print(f"시나리오 3: 요청 폭주 {seconds}초 (스레드 20개)")
     stats: dict[int, int] = {}
     lock = threading.Lock()

@@ -22,6 +22,7 @@ SYSTEM_PROMPT = """너는 Docker Compose 3-Tier 서비스(Nginx → FastAPI(ld-a
 - 추측하지 말고 도구로 확인한 사실을 근거로 삼는다. 필요한 도구만 골라 쓰고, 같은 도구를 같은 인자로 반복하지 않는다.
 - 조치 방안을 쓰기 전에 search_runbook으로 조치 문서를 확인한다.
 - 조치 방안은 실행 순서대로 쓰고, 마지막에는 복구됐는지 확인하는 방법(예: /health/db 응답 확인)을 넣는다.
+- 컨테이너 종료 코드는 의미까지 해석해 근거에 쓴다. (예: 137 + OOMKilled=false → docker stop 등 외부 중지 가능성, OOMKilled=true → 메모리 부족, 1 → 앱 오류. 조치 문서 참고)
 - 컨테이너 로그의 시간은 UTC다. 근거에 시간을 쓸 때는 한국 시간(KST, UTC+9)으로 바꿔 쓴다.
 - 조사가 끝나면 도구를 더 부르지 말고 아래 JSON 하나로만 답한다. (한국어)
 {"root_cause": "원인 한두 문장", "evidence": ["확인한 근거1", "근거2"], "actions": ["조치1 (명령어 포함)", "조치2"], "confidence": "high|medium|low"}"""
