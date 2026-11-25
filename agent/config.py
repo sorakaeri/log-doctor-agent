@@ -11,16 +11,26 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def load_dotenv(path: Path = ROOT / ".env") -> None:
-    """KEY=VALUE 형식의 .env를 읽어 os.environ에 넣는다. (이미 있는 값은 유지)"""
+    """KEY=VALUE 형식의 .env를 읽어 os.environ에 넣는다.
+
+    - 같은 키가 여러 번 나오면 마지막 값을 쓴다. (빈 줄이 위에 남아 있어도 아래 값이 적용됨)
+    - 시스템 환경 변수에 값이 이미 있으면 그 값을 유지한다. (빈 값은 덮어씀)
+    - Windows 메모장이 붙이는 BOM(utf-8-sig)도 처리한다.
+    """
     if not path.exists():
         return
-    for line in path.read_text(encoding="utf-8").splitlines():
+    values: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
+        if line.startswith("export "):
+            line = line[len("export "):]
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        value = value.strip().strip('"').strip("'")
-        os.environ.setdefault(key.strip(), value)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    for key, value in values.items():
+        if not os.environ.get(key):
+            os.environ[key] = value
 
 
 @dataclass

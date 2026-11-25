@@ -19,7 +19,7 @@ import time
 
 from .classifier import classify
 from .collector import LogCollector
-from .config import Config
+from .config import ROOT, Config
 from .detector import Detector
 from .investigator import investigate
 from .llm import GeminiClient, LLMError, text_of
@@ -62,6 +62,8 @@ def run_cycle(config, collector, detector, llm, tools, dry_run: bool) -> bool:
 
 
 def check(config: Config, llm: GeminiClient) -> None:
+    env = ROOT / ".env"
+    print(f".env 파일: {'있음' if env.exists() else '없음 (.env.txt로 저장되지 않았는지 확인)'}  {env}")
     print(f"로그 파일:")
     for name, path in config.log_files.items():
         print(f"  {name:<13} {'있음' if path.exists() else '없음'}  {path}")
